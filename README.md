@@ -10,8 +10,10 @@ Access to a Git repository with a valid Go module
 
 ## Installation
 
-git clone https://github.com/yourusername/yourproject.git
-cd yourproject
+```bash
+git clone https://github.com/sharmayajush/LineajeAssignment.git
+cd LineajeAssignment
+```
 
 ## Command
 ```bash

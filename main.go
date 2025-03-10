@@ -4,114 +4,46 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
-	"slices"
-	"strings"
 
-	"github.com/go-git/go-git/v5"
+	"github.com/sharmayajush/lineajeassignment/dependency"
+	"github.com/sharmayajush/lineajeassignment/repository"
 )
 
-type Artifact struct {
-	Name         string
-	Version      string
-	Dependencies []*Artifact
-}
-
-
 func main() {
-	githubURL := "https://github.com/etcd-io/etcd"
-	tag := "v3.5.5"
-	// cloneDir := "./etcd-repo"
-	artifactBuffer := make(map[string]*Artifact)
 
-	tmpDir := "/tmp/repo-clone"
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: go run main.go <githubURL> <tag>")
+		return
+	}
+
+	githubURL := os.Args[1]
+	tag := os.Args[2]
+
+	tmpDir := "./tmp/repo-clone"
 	defer os.RemoveAll(tmpDir)
 
-	repo, err := git.PlainClone(tmpDir, false, &git.CloneOptions{
-		URL:      githubURL,
-		Progress: os.Stdout,
-	})
+	repo, err := repository.CloneRepo(githubURL, tmpDir)
 	if err != nil {
 		fmt.Println("unable to clone repository")
 		return
 	}
-	fmt.Println("cloned repository")
 
-	tagRef, err := repo.Tag(tag)
-	if err != nil {
+	if err = repository.CheckoutToTag(repo, tag); err != nil {
+		fmt.Println("unable to checkout to tag ", tag)
 		return
 	}
 
-	worktree, err := repo.Worktree()
-	if err!=nil{
-		fmt.Println("")
-	}
-
-	worktree.Checkout(&git.CheckoutOptions{
-		Hash: tagRef.Hash(),
-	})
-
-	cmd := exec.Command("go", "mod", "graph")
-	cmd.Dir = tmpDir
-
-	output, err := cmd.CombinedOutput()
+	// get go mod graph to identify all the dependencies
+	lines, err := dependency.GetGoModGraph(tmpDir)
 	if err != nil {
-		fmt.Printf("Failed to run `go mod graph`: %s\n", err)
+		fmt.Println("error in executing go mod graph for the given directory")
 		return
 	}
 
-	lines := strings.Split(string(output), "\n")
+	ans := dependency.MakeDependencyGraph(&lines)
 
-	var ans *Artifact
+	fmt.Println("marshalling and printing result to output.json...")
 
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := lines[i]
-		fmt.Println(line)
-
-		if line == "" {
-			continue
-		}
-
-		relations := strings.Split(line, " ")
-		if len(relations) < 2 {
-			fmt.Println(relations)
-			continue
-		}
-		if _, ok := artifactBuffer[relations[1]]; !ok {
-			art := strings.Split(relations[1], "@")
-			if len(art) < 2 {
-				art = append(art, "v0")
-			}
-			artifactBuffer[relations[1]] = &Artifact{
-				Name:         art[0],
-				Version:      art[1],
-				Dependencies: nil,
-			}
-		}
-
-		if _, ok := artifactBuffer[relations[0]]; !ok {
-			art := strings.Split(relations[0], "@")
-			if len(art) < 2 {
-				art = append(art, "v0")
-			}
-			artifactBuffer[relations[0]] = &Artifact{
-				Name:         art[0],
-				Version:      art[1],
-				Dependencies: []*Artifact{},
-			}
-		}
-		if slices.Contains(artifactBuffer[relations[1]].Dependencies, artifactBuffer[relations[0]]) {
-			continue
-		}
-
-		artifactBuffer[relations[0]].Dependencies = append(artifactBuffer[relations[0]].Dependencies, artifactBuffer[relations[1]])
-		ans = artifactBuffer[relations[0]]
-
-	}
-
-	// Print the output of `go mod graph`
-	fmt.Println("Output of `go mod graph`:")
-	fmt.Println(ans)
 	result, err := json.MarshalIndent(*ans, "", "	")
 	if err != nil {
 		fmt.Println("unable to marshal the result", err)
@@ -135,5 +67,4 @@ func main() {
 
 	fmt.Println("JSON data successfully written to output.json")
 
-	// fmt.Println(string(output))
 }

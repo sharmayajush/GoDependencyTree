@@ -11,8 +11,8 @@ Access to a Git repository with a valid Go module
 ## Installation
 
 ```bash
-git clone https://github.com/sharmayajush/LineajeAssignment.git
-cd LineajeAssignment
+git clone https://github.com/sharmayajush/GoDependencyTree.git
+cd GoDependencyTree
 ```
 
 ## Command
